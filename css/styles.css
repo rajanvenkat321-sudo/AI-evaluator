@@ -367,6 +367,16 @@ h4 { font-size: 1.1rem; font-weight: 600; }
   gap: 16px;
   z-index: 90;
 }
+.menu-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+}
 .header-title { font-size: 1.1rem; font-weight: 700; }
 .header-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 
@@ -697,10 +707,11 @@ tbody tr:last-child td { border-bottom: none; }
 /* ── Responsive ────────────────────────────────────── */
 @media (max-width: 900px) {
   :root { --sidebar-w: 0px; }
-  .sidebar { transform: translateX(-260px); width: 260px; }
+  .sidebar { transform: translateX(-260px); width: 260px; z-index: 999; }
   .sidebar.open { transform: translateX(0); --sidebar-w: 260px; }
   .main-content { margin-left: 0; }
-  .top-header { left: 0; }
+  .top-header { left: 0; padding: 0 20px; }
+  .menu-btn { display: block; }
   .content-area { padding: 20px 16px; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2,1fr); }

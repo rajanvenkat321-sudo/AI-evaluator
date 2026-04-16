@@ -192,6 +192,8 @@ function buildSidebar(role, activeItem) {
         showSection(section);
         document.querySelectorAll('#sidebar-nav .nav-item').forEach(l => l.classList.remove('active'));
         link.classList.add('active');
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) sidebar.classList.remove('open');
       }
     });
   });
@@ -202,6 +204,7 @@ function buildHeader(title, actions = '') {
   const header = document.getElementById('top-header');
   if (!header) return;
   header.innerHTML = `
+    <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
     <div class="header-title">${title}</div>
     <div class="header-actions">${actions}</div>
   `;
