@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Teacher Portal — EvalAI</title>
+  <link rel="stylesheet" href="../css/styles.css"/>
+  <style>
+    body{background:var(--bg-base)}
+    .criteria-builder{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+    .criteria-row{display:grid;grid-template-columns:1fr 90px 36px;gap:8px;align-items:center}
+    .criteria-row input{padding:9px 12px;background:var(--bg-input);border:1.5px solid var(--border);border-radius:var(--radius-md);color:var(--text-primary);font-size:.88rem;outline:none;transition:border-color var(--transition)}
+    .criteria-row input:focus{border-color:var(--accent-primary)}
+    .criteria-row input[type=number]{text-align:center}
+    .del-btn{width:36px;height:36px;border-radius:var(--radius-md);border:1px solid rgba(252,92,125,.3);background:rgba(252,92,125,.1);color:#fc5c7d;font-size:1rem;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--transition)}
+    .del-btn:hover{background:rgba(252,92,125,.25)}
+    .rubric-item{background:var(--gradient-card);border:1px solid var(--glass-border);border-radius:var(--radius-lg);padding:22px 26px;margin-bottom:14px;transition:all var(--transition)}
+    .rubric-item:hover{border-color:var(--border-accent);transform:translateY(-1px)}
+    .student-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:var(--radius-full);background:rgba(108,99,255,.1);border:1px solid rgba(108,99,255,.25);font-size:.8rem;margin:4px}
+    .student-chip input[type=checkbox]{accent-color:var(--accent-primary)}
+    .report-bar{height:8px;border-radius:99px;background:var(--bg-card);overflow:hidden;margin-top:6px}
+    .report-bar-fill{height:100%;border-radius:99px;transition:width .8s}
+  </style>
+</head>
+<body>
+<div class="page-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="top-header" id="top-header"></header>
+    <div class="content-area">
+
+      <!-- DASHBOARD -->
+      <section id="sec-dashboard" class="animate-fade-up">
+        <h1 id="welcome-msg" class="mb-8"></h1>
+        <p class="text-muted mb-32">Manage rubrics, assignments and view student performance.</p>
+        <div class="stats-grid stagger" id="teacher-stats"></div>
+        <div class="grid-2" style="gap:24px">
+          <div><div class="section-header"><h3 class="section-title">My Rubrics</h3><button class="btn btn-primary btn-sm" onclick="openModal('rubric-modal');resetRubricForm()">+ New Rubric</button></div><div id="dash-rubrics"></div></div>
+          <div><div class="section-header"><h3 class="section-title">Recent Submissions</h3></div><div id="dash-subs"></div></div>
+        </div>
+      </section>
+
+      <!-- RUBRICS -->
+      <section id="sec-rubrics" class="hidden animate-fade-up">
+        <div class="section-header mb-24">
+          <div><h2 class="mb-4">Manage Rubrics</h2><p class="text-muted">Create and manage evaluation rubrics.</p></div>
+          <button class="btn btn-primary" onclick="openModal('rubric-modal');resetRubricForm()">+ Create Rubric</button>
+        </div>
+        <div id="rubrics-list"></div>
+      </section>
+
+      <!-- ASSIGNMENTS -->
+      <section id="sec-assignments" class="hidden animate-fade-up">
+        <div class="section-header mb-24">
+          <div><h2 class="mb-4">Assignments</h2><p class="text-muted">Assign rubrics to students.</p></div>
+          <button class="btn btn-primary" onclick="openModal('asgn-modal');resetAsgnForm()">+ New Assignment</button>
+        </div>
+        <div id="asgns-list"></div>
+      </section>
+
+      <!-- REPORTS -->
+      <section id="sec-reports" class="hidden animate-fade-up">
+        <h2 class="mb-8">Reports</h2>
+        <p class="text-muted mb-32">Student performance and evaluation breakdown.</p>
+        <div class="tabs" id="report-tabs">
+          <button class="tab-btn active" onclick="switchReport('overview',this)">Overview</button>
+          <button class="tab-btn" onclick="switchReport('submissions',this)">All Submissions</button>
+          <button class="tab-btn" onclick="switchReport('criteria',this)">By Criteria</button>
+        </div>
+        <div id="report-overview"></div>
+        <div id="report-submissions" class="hidden"></div>
+        <div id="report-criteria" class="hidden"></div>
+      </section>
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+
+<!-- Rubric Modal -->
+<div class="modal-overlay" id="rubric-modal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <h2 class="modal-title" id="rubric-modal-title">Create Rubric</h2>
+      <button class="modal-close" onclick="closeModal('rubric-modal')">✕</button>
+    </div>
+    <form id="rubric-form" onsubmit="saveRubric(event)">
+      <div class="form-group"><label class="form-label">Rubric Title</label><input class="form-input" id="rub-title" placeholder="e.g. Bubble Sort Flowchart" required/></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="rub-desc" style="min-height:80px" placeholder="Describe what this rubric evaluates…"></textarea></div>
+      <div class="form-group">
+        <div class="flex-between mb-8"><label class="form-label">Criteria</label><button type="button" class="btn btn-ghost btn-sm" onclick="addCriterion()">+ Add Criterion</button></div>
+        <div class="criteria-builder" id="criteria-builder"></div>
+        <div class="flex-between mt-8 card-flat"><span class="text-sm text-muted">Total Marks</span><span id="total-marks-preview" style="font-weight:800;color:var(--accent-primary)">0</span></div>
+      </div>
+      <input type="hidden" id="edit-rubric-id"/>
+      <button type="submit" class="btn btn-primary btn-full">Save Rubric</button>
+    </form>
+  </div>
+</div>
+
+<!-- Assignment Modal -->
+<div class="modal-overlay" id="asgn-modal">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <h2 class="modal-title" id="asgn-modal-title">New Assignment</h2>
+      <button class="modal-close" onclick="closeModal('asgn-modal')">✕</button>
+    </div>
+    <form id="asgn-form" onsubmit="saveAssignment(event)">
+      <div class="form-group"><label class="form-label">Assignment Title</label><input class="form-input" id="asgn-title" placeholder="e.g. Lab 1: Sorting Flowchart" required/></div>
+      <div class="form-group"><label class="form-label">Select Rubric</label>
+        <select class="form-select" id="asgn-rubric" required><option value="">Choose a rubric…</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" id="asgn-due" required/></div>
+      <div class="form-group"><label class="form-label">Assign To (Students)</label>
+        <div id="student-checkboxes" style="display:flex;flex-wrap:wrap;gap:4px;padding:12px;background:var(--bg-input);border-radius:var(--radius-md);border:1.5px solid var(--border);max-height:160px;overflow-y:auto;"></div>
+      </div>
+      <input type="hidden" id="edit-asgn-id"/>
+      <button type="submit" class="btn btn-primary btn-full">Save Assignment</button>
+    </form>
+  </div>
+</div>
+
+<!-- View Rubric Modal -->
+<div class="modal-overlay" id="view-rubric-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header"><h2 class="modal-title" id="view-rub-title">Rubric Details</h2><button class="modal-close" onclick="closeModal('view-rubric-modal')">✕</button></div>
+    <div id="view-rub-body"></div>
+  </div>
+</div>
+
+<!-- View Submission Modal -->
+<div class="modal-overlay" id="view-sub-modal">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <h2 class="modal-title" id="view-sub-title">Student Submission</h2>
+      <button class="modal-close" onclick="closeModal('view-sub-modal')">✕</button>
+    </div>
+    <div id="view-sub-body" style="background:var(--bg-input);padding:16px;border-radius:var(--radius-md);color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:.88rem;white-space:pre-wrap;border:1px solid var(--border);max-height:400px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<script src="../js/storage.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+const session = Auth.requireAnyRole('teacher','admin');
+buildSidebar('teacher','dashboard');
+buildHeader('Teacher Portal',`<button class="btn btn-primary btn-sm" onclick="showSection('rubrics');setTimeout(()=>openModal('rubric-modal'),100)">+ New Rubric</button>`);
+document.getElementById('welcome-msg').textContent=`Welcome, ${session.name}!`;
+
+function showSection(id){
+  document.querySelectorAll('[id^="sec-"]').forEach(s=>s.classList.add('hidden'));
+  const el=document.getElementById('sec-'+id);if(el)el.classList.remove('hidden');
+  const titles={dashboard:'Dashboard',rubrics:'Rubrics',assignments:'Assignments',reports:'Reports'};
+  buildHeader(titles[id]||'Teacher Portal',`<button class="btn btn-primary btn-sm" onclick="showSection('rubrics');setTimeout(()=>openModal('rubric-modal'),100)">+ New Rubric</button>`);
+  document.querySelectorAll('#sidebar .nav-item').forEach(l=>l.classList.remove('active'));
+  const a=document.querySelector(`#sidebar .nav-item[data-section="${id}"]`);if(a)a.classList.add('active');
+  if(id==='dashboard')loadDash();
+  else if(id==='rubrics')loadRubrics();
+  else if(id==='assignments')loadAssignments();
+  else if(id==='reports'){loadReports();switchReport('overview',document.querySelector('.tab-btn'));}
+}
+
+function emptyState(icon,t,d){return`<div class="empty-state"><div class="empty-icon">${icon}</div><h3>${t}</h3><p>${d}</p></div>`}
+
+// ── Dashboard ─────────────────────────────────────
+function loadDash(){
+  const myRubs=Rubrics.byTeacher(session.userId);
+  const myAsgns=Assignments.byTeacher(session.userId);
+  const allSubs=Submissions.all().filter(s=>myAsgns.find(a=>a.id===s.assignmentId));
+  const allRes=Results.all().filter(r=>myAsgns.find(a=>a.id===r.assignmentId));
+  const avg=allRes.length?Math.round(allRes.reduce((s,r)=>s+r.totalScore/r.totalMarks*100,0)/allRes.length):0;
+  document.getElementById('teacher-stats').innerHTML=`
+    <div class="stat-card animate-fade-up"><div class="stat-icon purple">R</div><div><div class="stat-value">${myRubs.length}</div><div class="stat-label">Rubrics</div></div></div>
+    <div class="stat-card animate-fade-up"><div class="stat-icon teal">A</div><div><div class="stat-value">${myAsgns.length}</div><div class="stat-label">Assignments</div></div></div>
+    <div class="stat-card animate-fade-up"><div class="stat-icon yellow">S</div><div><div class="stat-value">${allSubs.length}</div><div class="stat-label">Submissions</div></div></div>
+    <div class="stat-card animate-fade-up"><div class="stat-icon green">C</div><div><div class="stat-value">${avg}%</div><div class="stat-label">Class Avg</div></div></div>`;
+  const dr=document.getElementById('dash-rubrics');
+  dr.innerHTML=!myRubs.length?emptyState('','No rubrics','Create your first rubric!'):myRubs.slice(0,4).map(r=>
+    `<div class="card-flat mb-8 pointer" onclick="viewRubric('${r.id}')"><div class="flex-between">
+      <div><div style="font-weight:600;font-size:.9rem">${r.title}</div><div class="text-xs text-muted mt-4">${r.criteria.length} criteria · ${r.totalMarks} marks</div></div>
+      <span class="badge badge-purple">${r.criteria.length} criteria</span>
+    </div></div>`).join('');
+  const ds=document.getElementById('dash-subs');
+  const recent=[...allSubs].sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt)).slice(0,5);
+  ds.innerHTML=!recent.length?emptyState('','No submissions yet','Assign rubrics to students.'):recent.map(s=>{
+    const st=Users.get(s.studentId)||{};
+    const a=Assignments.get(s.assignmentId)||{};
+    const r=Results.bySubmission(s.id);
+    const pct=r?Math.round(r.totalScore/r.totalMarks*100):null;
+    return`<div class="card-flat mb-8"><div class="flex-between">
+      <div><div style="font-weight:600;font-size:.88rem">${st.name||'Student'}</div><div class="text-xs text-muted">${a.title||''} · ${formatDateTime(s.submittedAt)}</div></div>
+      <div style="display:flex;align-items:center;gap:12px">
+        ${pct!==null?`<span class="badge ${scoreBadge(pct)}">${r.totalScore}/${r.totalMarks}</span>`:`<span class="badge badge-yellow">${s.status}</span>`}
+        <button class="btn btn-outline btn-sm" onclick="viewSubmission('${s.id}')">View Work</button>
+      </div>
+    </div></div>`;
+  }).join('');
+}
+
+// ── Rubrics ───────────────────────────────────────
+function loadRubrics(){
+  const rubs=Rubrics.byTeacher(session.userId);
+  const el=document.getElementById('rubrics-list');
+  if(!rubs.length){el.innerHTML=emptyState('','No rubrics yet','Create your first rubric to start evaluating.');return;}
+  el.innerHTML=rubs.map(r=>`
+    <div class="rubric-item">
+      <div class="flex-between mb-12">
+        <div>
+          <h3 style="font-size:1rem;margin-bottom:4px">${r.title}</h3>
+          <p class="text-sm text-muted">${r.description||'No description'}</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="viewRubric('${r.id}')">View</button>
+          <button class="btn btn-outline btn-sm" onclick="editRubric('${r.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRubric('${r.id}')">Delete</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${r.criteria.map(c=>`<span class="tag">${c.name} (${c.marks})</span>`).join('')}
+        <span class="badge badge-purple" style="margin-left:auto">${r.totalMarks} total marks</span>
+      </div>
+      <div class="text-xs text-muted mt-8">Created ${formatDate(r.createdAt)}</div>
+    </div>`).join('');
+}
+
+// ── Rubric Form ───────────────────────────────────
+let criteriaCount=0;
+function resetRubricForm(){
+  document.getElementById('edit-rubric-id').value='';
+  document.getElementById('rubric-modal-title').textContent='Create Rubric';
+  document.getElementById('rub-title').value='';
+  document.getElementById('rub-desc').value='';
+  document.getElementById('criteria-builder').innerHTML='';
+  criteriaCount=0;
+  addCriterion();addCriterion();addCriterion();
+  updateTotalMarks();
+}
+
+function addCriterion(name='',marks='5'){
+  criteriaCount++;
+  const id='cr-'+criteriaCount;
+  const row=document.createElement('div');
+  row.className='criteria-row';row.id=id;
+  row.innerHTML=`
+    <input type="text" placeholder="Criterion name (e.g. Start/End Nodes)" value="${name}" class="cr-name" oninput="updateTotalMarks()" required/>
+    <input type="number" min="1" max="100" value="${marks}" class="cr-marks" oninput="updateTotalMarks()" required/>
+    <button type="button" class="del-btn" onclick="document.getElementById('${id}').remove();updateTotalMarks()">✕</button>`;
+  document.getElementById('criteria-builder').appendChild(row);
+  updateTotalMarks();
+}
+
+function updateTotalMarks(){
+  const marks=[...document.querySelectorAll('.cr-marks')].reduce((s,i)=>s+Number(i.value||0),0);
+  document.getElementById('total-marks-preview').textContent=marks+' marks';
+}
+
+function saveRubric(e){
+  e.preventDefault();
+  const title=document.getElementById('rub-title').value.trim();
+  const desc=document.getElementById('rub-desc').value.trim();
+  const editId=document.getElementById('edit-rubric-id').value;
+  const rows=[...document.querySelectorAll('.criteria-row')];
+  if(!rows.length){showToast('Add at least one criterion.','error');return;}
+  const criteria=rows.map((row,i)=>({
+    id:'c_'+Date.now()+'_'+i,
+    name:row.querySelector('.cr-name').value.trim(),
+    marks:Number(row.querySelector('.cr-marks').value)||1,
+    description:'',
+  })).filter(c=>c.name);
+  if(!criteria.length){showToast('At least one criterion required.','error');return;}
+  const totalMarks=criteria.reduce((s,c)=>s+c.marks,0);
+  if(editId){Rubrics.update(editId,{title,description:desc,criteria,totalMarks});}
+  else{Rubrics.add({title,description:desc,criteria,totalMarks,teacherId:session.userId});}
+  closeModal('rubric-modal');
+  showToast(editId?'Rubric updated!':'Rubric created!','success');
+  if(document.getElementById('sec-rubrics').classList.contains('hidden'))loadDash();else loadRubrics();
+}
+
+function editRubric(id){
+  const r=Rubrics.get(id);if(!r)return;
+  document.getElementById('edit-rubric-id').value=id;
+  document.getElementById('rubric-modal-title').textContent='Edit Rubric';
+  document.getElementById('rub-title').value=r.title;
+  document.getElementById('rub-desc').value=r.description||'';
+  document.getElementById('criteria-builder').innerHTML='';
+  criteriaCount=0;
+  r.criteria.forEach(c=>addCriterion(c.name,c.marks));
+  updateTotalMarks();
+  openModal('rubric-modal');
+}
+
+function viewRubric(id){
+  const r=Rubrics.get(id);if(!r)return;
+  document.getElementById('view-rub-title').textContent=r.title;
+  document.getElementById('view-rub-body').innerHTML=`
+    <p class="text-muted text-sm mb-20">${r.description||'No description'}</p>
+    ${r.criteria.map((c,i)=>`<div class="rubric-row"><span style="font-size:.88rem"><strong>${i+1}.</strong> ${c.name}</span><span class="badge badge-purple">${c.marks} marks</span></div>`).join('')}
+    <div class="divider"></div>
+    <div class="flex-between"><span class="text-muted text-sm">Total</span><span style="font-weight:800;color:var(--accent-primary)">${r.totalMarks} marks</span></div>
+    <div class="text-xs text-muted mt-8">Created ${formatDate(r.createdAt)}</div>`;
+  openModal('view-rubric-modal');
+}
+
+function deleteRubric(id){
+  confirmDialog('Delete this rubric? This cannot be undone.',()=>{
+    Rubrics.delete(id);showToast('Rubric deleted.','info');loadRubrics();
+  });
+}
+
+// ── Assignments ───────────────────────────────────
+function loadAssignments(){
+  const asgns=Assignments.byTeacher(session.userId);
+  const el=document.getElementById('asgns-list');
+  if(!asgns.length){el.innerHTML=emptyState('','No assignments','Create an assignment to distribute rubrics to students.');return;}
+  el.innerHTML=asgns.map(a=>{
+    const rub=Rubrics.get(a.rubricId)||{};
+    const subs=Submissions.byAssignment(a.id);
+    const submittedCount=subs.filter(s=>s.status==='evaluated').length;
+    return`<div class="rubric-item">
+      <div class="flex-between mb-12">
+        <div>
+          <h3 style="font-size:1rem;margin-bottom:4px">${a.title}</h3>
+          <p class="text-sm text-muted">Rubric: ${rub.title||'—'} · Due: ${formatDate(a.dueDate)}</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="deleteAsgn('${a.id}')">Delete</button>
+        </div>
+      </div>
+      <div class="flex-center gap-16">
+        <span class="badge badge-teal">${(a.assignedTo||[]).length} students</span>
+        <span class="badge badge-green">${submittedCount} evaluated</span>
+        <span class="badge badge-yellow">${subs.length - submittedCount} pending</span>
+        <span class="badge badge-purple">${rub.totalMarks||0} marks</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function resetAsgnForm(){
+  document.getElementById('edit-asgn-id').value='';
+  document.getElementById('asgn-modal-title').textContent='New Assignment';
+  document.getElementById('asgn-title').value='';
+  document.getElementById('asgn-due').value='';
+  const rubSel=document.getElementById('asgn-rubric');
+  const myRubs=Rubrics.byTeacher(session.userId);
+  rubSel.innerHTML='<option value="">Choose a rubric…</option>'+myRubs.map(r=>`<option value="${r.id}">${r.title}</option>`).join('');
+  const students=Users.byRole('student');
+  document.getElementById('student-checkboxes').innerHTML=students.map(s=>
+    `<label class="student-chip"><input type="checkbox" value="${s.id}" checked/> ${s.name}</label>`).join('');
+}
+
+function saveAssignment(e){
+  e.preventDefault();
+  const title=document.getElementById('asgn-title').value.trim();
+  const rubricId=document.getElementById('asgn-rubric').value;
+  const dueDate=document.getElementById('asgn-due').value;
+  const assignedTo=[...document.querySelectorAll('#student-checkboxes input:checked')].map(i=>i.value);
+  if(!assignedTo.length){showToast('Select at least one student.','error');return;}
+  Assignments.add({title,rubricId,dueDate,teacherId:session.userId,assignedTo});
+  closeModal('asgn-modal');
+  showToast('Assignment created!','success');
+  loadAssignments();
+}
+
+function deleteAsgn(id){
+  confirmDialog('Delete this assignment?',()=>{
+    Assignments.delete(id);showToast('Assignment deleted.','info');loadAssignments();
+  });
+}
+
+// ── Reports ───────────────────────────────────────
+function loadReports(){
+  switchReport('overview',document.querySelector('#report-tabs .tab-btn'));
+}
+
+function switchReport(tab,btn){
+  document.querySelectorAll('#report-tabs .tab-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  ['overview','submissions','criteria'].forEach(t=>document.getElementById('report-'+t).classList.add('hidden'));
+  document.getElementById('report-'+tab).classList.remove('hidden');
+  if(tab==='overview')renderOverview();
+  else if(tab==='submissions')renderSubmissionsReport();
+  else if(tab==='criteria')renderCriteriaReport();
+}
+
+function renderOverview(){
+  const el=document.getElementById('report-overview');
+  const myAsgns=Assignments.byTeacher(session.userId);
+  const allRes=Results.all().filter(r=>myAsgns.find(a=>a.id===r.assignmentId));
+  const students=Users.byRole('student');
+  if(!allRes.length){el.innerHTML=emptyState('','No data yet','Results will appear when students submit and get evaluated.');return;}
+  const studentData=students.map(s=>{
+    const sRes=allRes.filter(r=>r.studentId===s.id);
+    if(!sRes.length)return null;
+    const avg=Math.round(sRes.reduce((sum,r)=>sum+r.totalScore/r.totalMarks*100,0)/sRes.length);
+    return{...s,avg,count:sRes.length};
+  }).filter(Boolean).sort((a,b)=>b.avg-a.avg);
+  el.innerHTML=`<div class="card mb-20">
+    <h4 class="mb-16">Student Performance Ranking</h4>
+    ${studentData.map((s,i)=>`<div style="display:grid;grid-template-columns:32px 1fr auto auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="font-weight:800;color:var(--text-muted);font-size:.85rem">#${i+1}</span>
+      <div><div style="font-weight:600;font-size:.9rem">${s.name}</div><div class="text-xs text-muted">${s.count} submission${s.count>1?'s':''}</div></div>
+      <div style="width:120px"><div class="report-bar"><div class="report-bar-fill" style="width:${s.avg}%;background:${scoreColor(s.avg)}"></div></div></div>
+      <span class="badge ${scoreBadge(s.avg)}">${s.avg}%</span>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderSubmissionsReport(){
+  const el=document.getElementById('report-submissions');
+  const myAsgns=Assignments.byTeacher(session.userId);
+  const allSubs=Submissions.all().filter(s=>myAsgns.find(a=>a.id===s.assignmentId));
+  if(!allSubs.length){el.innerHTML=emptyState('','No submissions','No student has submitted yet.');return;}
+  const sorted=[...allSubs].sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt));
+  el.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>Student</th><th>Assignment</th><th>Submitted</th><th>Status</th><th>Score</th><th>Action</th></tr></thead>
+    <tbody>${sorted.map(s=>{
+      const st=Users.get(s.studentId)||{};
+      const a=Assignments.get(s.assignmentId)||{};
+      const r=Results.bySubmission(s.id);
+      const pct=r?Math.round(r.totalScore/r.totalMarks*100):null;
+      const bc=s.status==='evaluated'?'badge-green':s.status==='error'?'badge-red':'badge-yellow';
+      return`<tr>
+        <td><strong>${st.name||'—'}</strong><div class="text-xs text-muted">${st.email||''}</div></td>
+        <td class="text-sm">${a.title||'—'}</td>
+        <td class="text-sm text-muted">${formatDateTime(s.submittedAt)}</td>
+        <td><span class="badge ${bc}">${s.status}</span></td>
+        <td>${r?`<span class="badge ${scoreBadge(pct)}">${r.totalScore}/${r.totalMarks} (${pct}%)</span>`:'—'}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="viewSubmission('${s.id}')">View Work</button></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+function renderCriteriaReport(){
+  const el=document.getElementById('report-criteria');
+  const myRubs=Rubrics.byTeacher(session.userId);
+  if(!myRubs.length){el.innerHTML=emptyState('','No rubrics','Create rubrics to see criteria analysis.');return;}
+  const allRes=Results.all();
+  el.innerHTML=myRubs.map(rub=>{
+    const rubRes=allRes.filter(r=>r.rubricId===rub.id);
+    if(!rubRes.length)return`<div class="card mb-16"><h4>${rub.title}</h4><p class="text-muted text-sm mt-8">No evaluations yet.</p></div>`;
+    return`<div class="card mb-16">
+      <h4 class="mb-16">${rub.title} <span class="badge badge-gray" style="margin-left:8px">${rubRes.length} evaluation${rubRes.length>1?'s':''}</span></h4>
+      ${rub.criteria.map(c=>{
+        const scores=rubRes.map(r=>{const fc=r.criteria?.find(rc=>rc.id===c.id);return fc?fc.awarded/fc.max*100:0;});
+        const avgScore=Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+        return`<div style="margin-bottom:14px">
+          <div class="flex-between mb-4"><span style="font-size:.88rem;font-weight:600">${c.name}</span><span style="font-size:.8rem;color:${scoreColor(avgScore)};font-weight:700">${avgScore}% avg</span></div>
+          <div class="report-bar"><div class="report-bar-fill" style="width:${avgScore}%;background:${scoreColor(avgScore)}"></div></div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+}
+
+function viewSubmission(id){
+  const sub = Submissions.get(id);
+  if(!sub){ showToast('Submission not found', 'error'); return; }
+  const st = Users.get(sub.studentId) || {};
+  const asgn = Assignments.get(sub.assignmentId) || {};
+  document.getElementById('view-sub-title').textContent = `${st.name || 'Student'}'s Submission - ${asgn.title || 'Assignment'}`;
+  document.getElementById('view-sub-body').textContent = sub.content || 'No content provided.';
+  openModal('view-sub-modal');
+}
+
+function handleHash(){const h=window.location.hash.replace('#','');['dashboard','rubrics','assignments','reports'].includes(h)?showSection(h):showSection('dashboard');}
+window.addEventListener('hashchange',handleHash);
+handleHash();
+</script>
+</body>
+</html>

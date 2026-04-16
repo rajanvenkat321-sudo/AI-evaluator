@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Portal — EvalAI</title>
+  <link rel="stylesheet" href="../css/styles.css"/>
+  <style>
+    body{background:var(--bg-base)}
+    .submission-box{background:var(--bg-input);border:2px dashed var(--border);border-radius:var(--radius-lg);padding:20px;transition:border-color var(--transition);position:relative}
+    .submission-box:focus-within{border-color:var(--accent-primary)}
+    .submission-box textarea{background:transparent;border:none;width:100%;min-height:260px;color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:.88rem;line-height:1.8;outline:none;resize:vertical}
+    .char-count{position:absolute;bottom:10px;right:14px;font-size:.72rem;color:var(--text-muted)}
+    .asgn-card{background:var(--gradient-card);border:1px solid var(--glass-border);border-radius:var(--radius-lg);padding:18px 22px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all var(--transition);margin-bottom:10px}
+    .asgn-card:hover,.asgn-card.selected{border-color:var(--accent-primary);box-shadow:0 0 0 2px rgba(108,99,255,.2)}
+    .asgn-card.selected{background:rgba(108,99,255,.08)}
+    .score-ring-sm{width:72px;height:72px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;border:3px solid var(--border-accent);flex-shrink:0}
+  </style>
+</head>
+<body>
+<div class="page-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="top-header" id="top-header"></header>
+    <div class="content-area">
+
+      <!-- DASHBOARD -->
+      <section id="sec-dashboard" class="animate-fade-up">
+        <h1 id="welcome-msg" class="mb-8"></h1>
+        <p class="text-muted mb-32">Here's your overview.</p>
+        <div class="stats-grid stagger" id="student-stats"></div>
+        <div class="grid-2" style="gap:24px">
+          <div><div class="section-header"><h3 class="section-title">Recent Submissions</h3></div><div id="recent-subs"></div></div>
+          <div><div class="section-header"><h3 class="section-title">Pending Assignments</h3></div><div id="pending-asgns"></div></div>
+        </div>
+      </section>
+
+      <!-- SUBMIT -->
+      <section id="sec-submit" class="hidden animate-fade-up">
+        <h2 class="mb-8">Submit Work</h2>
+        <p class="text-muted mb-32">Select an assignment and write your algorithm / pseudocode / flowchart steps.</p>
+        <div class="grid-2" style="align-items:start;gap:28px">
+          <div>
+            <label class="form-label mb-8">Select Assignment</label>
+            <div id="asgn-list"></div>
+            <div class="card hidden mt-16" id="rubric-preview">
+              <h4 class="mb-12">Rubric Preview</h4>
+              <div id="rubric-rows"></div>
+              <div class="divider"></div>
+              <div class="flex-between"><span class="text-muted text-sm">Total Marks</span><span id="rubric-total" style="font-weight:800;color:var(--accent-primary)"></span></div>
+            </div>
+          </div>
+          <div>
+            <label class="form-label mb-8">Your Submission</label>
+            <p class="form-hint mb-8">Write numbered steps or upload a text file. Do NOT paste images.</p>
+            <div class="mb-12" style="display:flex;align-items:center;gap:12px">
+              <input type="file" id="file-upload" accept=".txt,.md,.c,.cpp,.py,.java,.js,.pdf,image/png,image/jpeg,image/jpg" style="display:none" onchange="handleFileUpload(event)" />
+              <button class="btn btn-outline btn-sm" onclick="document.getElementById('file-upload').click()">Upload File</button>
+              <span id="file-name-display" class="text-sm text-muted">No file chosen</span>
+            </div>
+            <div class="submission-box">
+              <textarea id="sub-content" placeholder="START&#10;INPUT: Array A with n elements&#10;Step 1: ...&#10;...&#10;END"></textarea>
+              <span class="char-count" id="char-count">0 chars</span>
+            </div>
+            <div class="alert alert-warn hidden mt-8" id="sub-warn"></div>
+            <div class="alert alert-info mt-8" style="font-size:.82rem">Evaluated locally against each rubric criterion — no external API required.</div>
+            <button class="btn btn-primary btn-full btn-lg mt-16" onclick="handleSubmit()">Submit &amp; Evaluate</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- HISTORY -->
+      <section id="sec-history" class="hidden animate-fade-up">
+        <h2 class="mb-8">My Submissions</h2>
+        <p class="text-muted mb-32">All submitted work and evaluation status.</p>
+        <div class="table-wrap">
+          <table><thead><tr><th>Assignment</th><th>Submitted</th><th>Status</th><th>Score</th><th>Action</th></tr></thead>
+          <tbody id="history-tbody"></tbody></table>
+        </div>
+      </section>
+
+      <!-- RESULTS -->
+      <section id="sec-results" class="hidden animate-fade-up">
+        <h2 class="mb-8">My Results</h2>
+        <p class="text-muted mb-32">Detailed AI evaluation results.</p>
+        <div id="results-list"></div>
+      </section>
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+
+<!-- Result Modal -->
+<div class="modal-overlay" id="res-modal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header"><h2 class="modal-title" id="res-modal-title">Result</h2><button class="modal-close" onclick="closeModal('res-modal')">✕</button></div>
+    <div id="res-modal-body"></div>
+  </div>
+</div>
+
+<script src="../js/storage.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/evaluator.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+const session = Auth.requireRole('student');
+let selAsgn = null;
+buildSidebar('student','dashboard');
+buildHeader('Student Portal',`<button class="btn btn-ghost btn-sm" onclick="showSection('submit')">New Submission</button>`);
+document.getElementById('welcome-msg').textContent = `Welcome back, ${session.name}!`;
+
+function showSection(id){
+  document.querySelectorAll('[id^="sec-"]').forEach(s=>s.classList.add('hidden'));
+  const el=document.getElementById('sec-'+id);
+  if(el){el.classList.remove('hidden');}
+  const titles={dashboard:'Dashboard',submit:'Submit Work',history:'My Submissions',results:'My Results'};
+  buildHeader(titles[id]||'Student Portal',`<button class="btn btn-ghost btn-sm" onclick="showSection('submit')">New Submission</button>`);
+  document.querySelectorAll('#sidebar .nav-item').forEach(l=>l.classList.remove('active'));
+  const active=document.querySelector(`#sidebar .nav-item[data-section="${id}"]`);
+  if(active)active.classList.add('active');
+  if(id==='dashboard')loadDash();
+  else if(id==='submit')loadSubmit();
+  else if(id==='history')loadHistory();
+  else if(id==='results')loadResults();
+}
+
+function emptyState(icon,t,d){return`<div class="empty-state"><div class="empty-icon">${icon}</div><h3>${t}</h3><p>${d}</p></div>`}
+
+function loadDash(){
+  const subs=Submissions.byStudent(session.userId);
+  const ress=Results.byStudent(session.userId);
+  const asgns=Assignments.byStudent(session.userId);
+  const avg=ress.length?Math.round(ress.reduce((s,r)=>s+r.totalScore/r.totalMarks*100,0)/ress.length):0;
+  document.getElementById('student-stats').innerHTML=`
+    <div class="stat-card animate-fade-up"><div class="stat-icon purple">A</div><div><div class="stat-value">${asgns.length}</div><div class="stat-label">Assignments</div></div></div>
+    <div class="stat-card animate-fade-up"><div class="stat-icon teal">S</div><div><div class="stat-value">${subs.length}</div><div class="stat-label">Submitted</div></div></div>
+    <div class="stat-card animate-fade-up"><div class="stat-icon green">E</div><div><div class="stat-value">${ress.length}</div><div class="stat-label">Evaluated</div></div></div>
+    <div class="stat-card animate-fade-up"><div class="stat-icon yellow">C</div><div><div class="stat-value">${avg}%</div><div class="stat-label">Avg Score</div></div></div>`;
+  const recent=[...subs].sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt)).slice(0,4);
+  const rsEl=document.getElementById('recent-subs');
+  rsEl.innerHTML=!recent.length?emptyState('','No submissions yet','Submit your first assignment!'):recent.map(s=>{
+    const a=Assignments.get(s.assignmentId)||{};
+    const r=Results.bySubmission(s.id);
+    const pct=r?Math.round(r.totalScore/r.totalMarks*100):null;
+    return`<div class="card-flat mb-8 pointer" onclick="showResultModal('${s.id}')"><div class="flex-between">
+      <div><div style="font-weight:600;font-size:.9rem">${a.title||'Assignment'}</div><div class="text-xs text-muted mt-4">${formatDateTime(s.submittedAt)}</div></div>
+      ${pct!==null?`<span class="badge ${scoreBadge(pct)}">${r.totalScore}/${r.totalMarks} (${pct}%)</span>`:`<span class="badge badge-yellow">${s.status}</span>`}
+    </div></div>`;
+  }).join('');
+  const pending=asgns.filter(a=>!subs.find(s=>s.assignmentId===a.id));
+  const pEl=document.getElementById('pending-asgns');
+  pEl.innerHTML=!pending.length?`<div class="card-flat"><p class="text-muted text-sm">All submitted!</p></div>`:pending.map(a=>{
+    const rub=Rubrics.get(a.rubricId)||{};
+    return`<div class="card-flat mb-8 pointer" onclick="showSection('submit');setTimeout(()=>pickAsgn('${a.id}'),300)"><div class="flex-between">
+      <div><div style="font-weight:600;font-size:.9rem">${a.title}</div><div class="text-xs text-muted mt-4">Due: ${formatDate(a.dueDate)} · ${rub.totalMarks||0} marks</div></div>
+      <span class="badge badge-red">Pending</span>
+    </div></div>`;
+  }).join('');
+}
+
+function loadSubmit(){
+  const asgns=Assignments.byStudent(session.userId);
+  const el=document.getElementById('asgn-list');
+  if(!asgns.length){el.innerHTML=emptyState('','No assignments','Assigned rubrics will appear here.');return;}
+  const subs=Submissions.byStudent(session.userId);
+  el.innerHTML=asgns.map(a=>{
+    const rub=Rubrics.get(a.rubricId)||{};
+    const done=subs.find(s=>s.assignmentId===a.id&&s.status==='evaluated');
+    return`<div class="asgn-card${selAsgn===a.id?' selected':''}" id="ac-${a.id}" onclick="pickAsgn('${a.id}')">
+      <div style="font-size:1.4rem;font-weight:600;padding:12px;background:var(--bg-input);border-radius:var(--radius-md);border:1px solid var(--border)">A</div>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:.92rem">${a.title}</div>
+        <div class="text-xs text-muted mt-4">Rubric: ${rub.title||''} · Marks: ${rub.totalMarks||0} · Due: ${formatDate(a.dueDate)}${done?' · Already submitted':''}</div>
+      </div>
+      ${done?'<span class="badge badge-yellow">Done</span>':'<span class="badge badge-purple">Open</span>'}
+    </div>`;
+  }).join('');
+  if(selAsgn)pickAsgn(selAsgn);
+}
+
+function pickAsgn(id){
+  selAsgn=id;
+  document.querySelectorAll('.asgn-card').forEach(c=>c.classList.remove('selected'));
+  const c=document.getElementById('ac-'+id);if(c)c.classList.add('selected');
+  const a=Assignments.get(id);const rub=Rubrics.get(a?.rubricId);if(!rub)return;
+  document.getElementById('rubric-preview').classList.remove('hidden');
+  document.getElementById('rubric-total').textContent=rub.totalMarks+' marks';
+  document.getElementById('rubric-rows').innerHTML=rub.criteria.map(c=>`<div class="rubric-row"><span style="font-size:.88rem">${c.name}</span><span class="badge badge-purple">${c.marks} marks</span></div>`).join('');
+}
+
+document.getElementById('sub-content').addEventListener('input',function(){document.getElementById('char-count').textContent=this.value.length+' chars';});
+
+async function handleFileUpload(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  document.getElementById('file-name-display').textContent = file.name;
+  
+  if (file.type.startsWith('image/')) {
+    document.getElementById('sub-content').value = "Extracting text from image... please wait. This might take a few seconds.";
+    document.getElementById('char-count').textContent = 'Processing...';
+    try {
+      const result = await Tesseract.recognize(file, 'eng', {
+        logger: m => {
+          if(m.status === 'recognizing text') {
+            document.getElementById('char-count').textContent = 'Loading OCR Engine & Processing: ' + Math.round(m.progress * 100) + '%';
+          }
+        }
+      });
+      const text = result.data.text;
+      document.getElementById('sub-content').value = text.trim() || 'No text could be extracted from this image.';
+      document.getElementById('char-count').textContent = document.getElementById('sub-content').value.length + ' chars';
+    } catch (e) {
+      document.getElementById('sub-content').value = "Error extracting text: " + e.message;
+      document.getElementById('char-count').textContent = 'Error';
+    }
+  } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+    }
+    document.getElementById('sub-content').value = fullText.trim();
+    document.getElementById('char-count').textContent = fullText.trim().length + ' chars';
+  } else {
+    const reader = new FileReader();
+    reader.onload = function(e){
+      const text = e.target.result;
+      document.getElementById('sub-content').value = text;
+      document.getElementById('char-count').textContent = text.length + ' chars';
+    };
+    reader.readAsText(file);
+  }
+}
+
+async function handleSubmit(){
+  const content=document.getElementById('sub-content').value.trim();
+  const wEl=document.getElementById('sub-warn');wEl.classList.add('hidden');
+  if(!selAsgn){wEl.textContent='Please select an assignment first.';wEl.classList.remove('hidden');return;}
+  if(content.length<30){wEl.textContent='Too short — write at least 30 characters.';wEl.classList.remove('hidden');return;}
+  const asgn=Assignments.get(selAsgn);const rub=Rubrics.get(asgn.rubricId);
+  const sub=Submissions.add({studentId:session.userId,assignmentId:selAsgn,rubricId:rub.id,content});
+  showLoading('Evaluating your submission locally…');
+  try{
+    await new Promise(r=>setTimeout(r,400));
+    updateLoadingText('Analysing against rubric criteria…');
+    const evalRes=await evaluateSubmission(sub,rub);
+    updateLoadingText('Generating structured feedback…');
+    await new Promise(r=>setTimeout(r,300));
+    Results.add({submissionId:sub.id,studentId:session.userId,rubricId:rub.id,assignmentId:selAsgn,...evalRes});
+    Submissions.update(sub.id,{status:'evaluated'});
+    hideLoading();
+    showToast('Evaluation complete — results ready.','success');
+    document.getElementById('sub-content').value='';
+    document.getElementById('char-count').textContent='0 chars';
+    document.getElementById('file-name-display').textContent='No file chosen';
+    document.getElementById('file-upload').value='';
+    selAsgn=null;showSection('results');
+  }catch(err){hideLoading();Submissions.update(sub.id,{status:'error'});showToast('Error: '+err.message,'error',6000);}
+}
+
+function loadHistory(){
+  const subs=[...Submissions.byStudent(session.userId)].sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt));
+  const tb=document.getElementById('history-tbody');
+  if(!subs.length){tb.innerHTML=`<tr><td colspan="5">${emptyState('','No submissions yet','Go to Submit Work.')}</td></tr>`;return;}
+  tb.innerHTML=subs.map(s=>{
+    const a=Assignments.get(s.assignmentId)||{};
+    const r=Results.bySubmission(s.id);
+    const pct=r?Math.round(r.totalScore/r.totalMarks*100):null;
+    const bc=s.status==='evaluated'?'badge-green':s.status==='error'?'badge-red':'badge-yellow';
+    return`<tr>
+      <td><strong>${a.title||'—'}</strong></td>
+      <td class="text-sm text-muted">${formatDateTime(s.submittedAt)}</td>
+      <td><span class="badge ${bc}">${s.status}</span></td>
+      <td>${r?`<span class="badge ${scoreBadge(pct)}">${r.totalScore}/${r.totalMarks}</span>`:'—'}</td>
+      <td>${r?`<button class="btn btn-ghost btn-sm" onclick="showResultModal('${s.id}')">View</button>`:'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function loadResults(){
+  const ress=[...Results.byStudent(session.userId)].sort((a,b)=>new Date(b.evaluatedAt)-new Date(a.evaluatedAt));
+  const el=document.getElementById('results-list');
+  if(!ress.length){el.innerHTML=emptyState('','No results yet','Submit an assignment to see AI feedback here.');return;}
+  el.innerHTML=ress.map(r=>{
+    const a=Assignments.get(r.assignmentId)||{};
+    const pct=Math.round(r.totalScore/r.totalMarks*100);
+    const sub=Submissions.get(r.submissionId)||{};
+    return`<div class="card mb-16 pointer" onclick="showResultModal('${sub.id||''}','${r.id}')">
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:start">
+        <div class="score-ring-sm" style="border-color:${scoreColor(pct)};box-shadow:0 0 20px ${scoreColor(pct)}44">
+          <div style="font-size:1.2rem;font-weight:800;color:${scoreColor(pct)}">${r.totalScore}</div>
+          <div style="font-size:.65rem;color:var(--text-muted)">/ ${r.totalMarks}</div>
+        </div>
+        <div>
+          <div class="flex-between mb-8">
+            <div><div style="font-weight:700">${a.title||'Assignment'}</div><div class="text-xs text-muted">${formatDateTime(r.evaluatedAt)}</div></div>
+            <span class="badge ${scoreBadge(pct)}">${pct}% · ${gradeLabel(pct)}</span>
+          </div>
+          <div class="progress-wrap mb-12"><div class="progress-bar" style="width:${pct}%;background:${scoreColor(pct)}"></div></div>
+          <div class="tags">${r.criteria.slice(0,3).map(c=>`<span class="tag">${c.name}: ${c.awarded}/${c.max}</span>`).join('')}${r.criteria.length>3?`<span class="tag">+${r.criteria.length-3} more</span>`:''}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showResultModal(subId,resId){
+  const r=resId?Results.get(resId):Results.bySubmission(subId);
+  if(!r){showToast('Result not found','error');return;}
+  const a=Assignments.get(r.assignmentId)||{};
+  const pct=Math.round(r.totalScore/r.totalMarks*100);
+  document.getElementById('res-modal-title').textContent=a.title||'Evaluation Result';
+  document.getElementById('res-modal-body').innerHTML=`
+    <div style="display:flex;align-items:center;gap:20px;padding:20px;background:var(--bg-card);border-radius:var(--radius-lg);margin-bottom:24px">
+      <div class="score-ring-sm" style="border-color:${scoreColor(pct)};box-shadow:0 0 20px ${scoreColor(pct)}44">
+        <div style="font-size:1.2rem;font-weight:800;color:${scoreColor(pct)}">${r.totalScore}</div>
+        <div style="font-size:.65rem;color:var(--text-muted)">/ ${r.totalMarks}</div>
+      </div>
+      <div><div style="font-size:2rem;font-weight:900;color:${scoreColor(pct)}">${pct}%</div><span class="badge ${scoreBadge(pct)} mt-4">Grade: ${gradeLabel(pct)}</span></div>
+      <div style="flex:1"><div class="progress-wrap"><div class="progress-bar" style="width:${pct}%;background:${scoreColor(pct)};height:10px"></div></div><div class="text-xs text-muted mt-8">${formatDateTime(r.evaluatedAt)}</div></div>
+    </div>
+    <h4 style="margin-bottom:14px">Criterion-wise Evaluation</h4>
+    ${(r.criteria||[]).map(c=>{const cp=Math.round(c.awarded/c.max*100);return`<div class="criterion-card">
+      <div class="criterion-header"><span class="criterion-name">${c.name}</span><span class="criterion-score" style="color:${scoreColor(cp)}">${c.awarded} / ${c.max}</span></div>
+      <div class="progress-wrap mb-10" style="height:5px"><div class="progress-bar" style="width:${cp}%;background:${scoreColor(cp)}"></div></div>
+      <p class="criterion-feedback">${c.feedback}</p>
+    </div>`}).join('')}
+    <div class="grid-2 mt-16" style="gap:16px">
+      <div class="card-flat"><div class="eval-section-title mb-8">Strengths</div><ul>${(r.strengths||[]).map(s=>`<li style="display:flex;gap:8px;margin-bottom:6px;font-size:.85rem;color:var(--accent-success)"><span>+</span>${s}</li>`).join('')}</ul></div>
+      <div class="card-flat"><div class="eval-section-title mb-8">Weaknesses</div><ul>${(r.weaknesses||[]).map(w=>`<li style="display:flex;gap:8px;margin-bottom:6px;font-size:.85rem;color:var(--accent-danger)"><span>-</span>${w}</li>`).join('')}</ul></div>
+    </div>
+    <div class="card-flat mt-16"><div class="eval-section-title mb-8">Suggestions</div><ul class="bullet-list">${(r.suggestions||[]).map(s=>`<li>${s}</li>`).join('')}</ul></div>`;
+  openModal('res-modal');
+}
+
+function handleHash(){const h=window.location.hash.replace('#','');['dashboard','submit','history','results'].includes(h)?showSection(h):showSection('dashboard');}
+window.addEventListener('hashchange',handleHash);
+handleHash();
+</script>
+</body>
+</html>

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Panel — EvalAI</title>
+  <link rel="stylesheet" href="../css/styles.css"/>
+  <style>
+    body{background:var(--bg-base)}
+    .role-badge-student{background:rgba(67,233,123,.15);color:#43e97b;border:1px solid rgba(67,233,123,.3)}
+    .role-badge-teacher{background:rgba(108,99,255,.15);color:#a79fff;border:1px solid rgba(108,99,255,.3)}
+    .role-badge-admin  {background:rgba(252,92,125,.15);color:#fc5c7d;border:1px solid rgba(252,92,125,.3)}
+    .api-input-wrap{display:flex;gap:10px;align-items:center}
+    .api-input-wrap input{flex:1}
+    .activity-row{display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--border)}
+    .activity-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  </style>
+</head>
+<body>
+<div class="page-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="top-header" id="top-header"></header>
+    <div class="content-area">
+
+      <!-- DASHBOARD -->
+      <section id="sec-dashboard" class="animate-fade-up">
+        <h1 class="mb-8">Admin Dashboard 🛠</h1>
+        <p class="text-muted mb-32">System-wide overview of all users, rubrics, and evaluations.</p>
+        <div class="stats-grid stagger" id="admin-stats"></div>
+        <div class="grid-2" style="gap:24px">
+          <div><div class="section-header"><h3 class="section-title">Recent Evaluations</h3></div><div id="recent-evals"></div></div>
+          <div><div class="section-header"><h3 class="section-title">System Health</h3></div><div id="sys-health"></div></div>
+        </div>
+      </section>
+
+      <!-- USERS -->
+      <section id="sec-users" class="hidden animate-fade-up">
+        <div class="section-header mb-24">
+          <div><h2 class="mb-4">User Management 👥</h2><p class="text-muted">Manage all student, teacher, and admin accounts.</p></div>
+          <button class="btn btn-primary" onclick="openModal('user-modal');resetUserForm()">+ Add User</button>
+        </div>
+        <div class="tabs" id="user-tabs">
+          <button class="tab-btn active" onclick="filterUsers('all',this)">All</button>
+          <button class="tab-btn" onclick="filterUsers('student',this)">Students</button>
+          <button class="tab-btn" onclick="filterUsers('teacher',this)">Teachers</button>
+          <button class="tab-btn" onclick="filterUsers('admin',this)">Admins</button>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th>Actions</th></tr></thead>
+          <tbody id="users-table"></tbody></table>
+        </div>
+      </section>
+
+      <!-- RUBRICS -->
+      <section id="sec-rubrics" class="hidden animate-fade-up">
+        <h2 class="mb-8">All Rubrics 📝</h2>
+        <p class="text-muted mb-32">View all rubrics created by all teachers.</p>
+        <div class="table-wrap">
+          <table><thead><tr><th>Title</th><th>Teacher</th><th>Criteria</th><th>Total Marks</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody id="all-rubrics-table"></tbody></table>
+        </div>
+      </section>
+
+      <!-- ACTIVITY -->
+      <section id="sec-activity" class="hidden animate-fade-up">
+        <h2 class="mb-8">System Activity 📈</h2>
+        <p class="text-muted mb-32">All submissions and evaluation activity across the system.</p>
+        <div class="stats-grid stagger mb-24" id="activity-stats"></div>
+        <div class="card">
+          <h4 class="mb-16">All Evaluations</h4>
+          <div id="activity-feed"></div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section id="sec-settings" class="hidden animate-fade-up">
+        <h2 class="mb-8">System Settings ⚙️</h2>
+        <p class="text-muted mb-32">Configure the AI evaluation engine and system options.</p>
+        <div class="grid-2" style="gap:24px;align-items:start">
+          <div>
+            <div class="card mb-20">
+              <h4 class="mb-4">Evaluation Engine</h4>
+              <p class="text-sm text-muted mb-16">All evaluations are performed locally in the browser — no external API, no server calls, no API key required.</p>
+              <div class="alert alert-info mb-16" style="font-size:.82rem;display:flex;align-items:center;gap:10px">
+                <span style="font-size:1.1rem">✔</span>
+                <span><strong>Local Engine Active</strong> — Rubric-based keyword analysis, structural pattern detection, and intelligent feedback generation running entirely in-browser.</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div class="card-flat"><div class="flex-between"><span class="text-sm">Engine Type</span><span class="badge badge-green">Local / Browser</span></div></div>
+                <div class="card-flat"><div class="flex-between"><span class="text-sm">API Dependency</span><span class="badge badge-teal">None</span></div></div>
+                <div class="card-flat"><div class="flex-between"><span class="text-sm">OCR (Image Upload)</span><span class="badge badge-purple">Tesseract.js (local)</span></div></div>
+                <div class="card-flat"><div class="flex-between"><span class="text-sm">PDF Parsing</span><span class="badge badge-purple">PDF.js (local)</span></div></div>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="mb-4">🗃 Data Management</h4>
+              <p class="text-sm text-muted mb-16">Reset or manage system data. Warning: destructive actions cannot be undone.</p>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button class="btn btn-outline btn-sm" onclick="exportData()">📥 Export Data (JSON)</button>
+                <button class="btn btn-danger btn-sm" onclick="resetAllData()">🗑 Reset All Data</button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card mb-20">
+              <h4 class="mb-12">📊 System Statistics</h4>
+              <div id="settings-stats"></div>
+            </div>
+            <div class="card">
+              <h4 class="mb-12">👤 Demo Accounts</h4>
+              <div style="display:flex;flex-direction:column;gap:8px" id="demo-accounts"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+
+<!-- Add/Edit User Modal -->
+<div class="modal-overlay" id="user-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header"><h2 class="modal-title" id="user-modal-title">Add User</h2><button class="modal-close" onclick="closeModal('user-modal')">✕</button></div>
+    <form id="user-form" onsubmit="saveUser(event)">
+      <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="u-name" required placeholder="Full name"/></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="u-email" type="email" required placeholder="email@example.com"/></div>
+      <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="u-pass" type="password" placeholder="Leave blank to keep existing" minlength="6"/></div>
+      <div class="form-group"><label class="form-label">Role</label>
+        <select class="form-select" id="u-role" required>
+          <option value="">Select role…</option>
+          <option value="student">Student</option>
+          <option value="teacher">Teacher</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <input type="hidden" id="edit-user-id"/>
+      <button type="submit" class="btn btn-primary btn-full">Save User</button>
+    </form>
+  </div>
+</div>
+
+<script src="../js/storage.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+const session = Auth.requireRole('admin');
+buildSidebar('admin','dashboard');
+buildHeader('Admin Panel',`<button class="btn btn-primary btn-sm" onclick="showSection('settings')">⚙️ Settings</button>`);
+
+function showSection(id){
+  document.querySelectorAll('[id^="sec-"]').forEach(s=>s.classList.add('hidden'));
+  const el=document.getElementById('sec-'+id);if(el)el.classList.remove('hidden');
+  const titles={dashboard:'Admin Dashboard',users:'User Management',rubrics:'All Rubrics',activity:'System Activity',settings:'Settings'};
+  buildHeader(titles[id]||'Admin Panel',`<button class="btn btn-primary btn-sm" onclick="showSection('settings')">⚙️ Settings</button>`);
+  document.querySelectorAll('#sidebar .nav-item').forEach(l=>l.classList.remove('active'));
+  const a=document.querySelector(`#sidebar .nav-item[data-section="${id}"]`);if(a)a.classList.add('active');
+  if(id==='dashboard')loadDash();
+  else if(id==='users'){loadUsers('all');}
+  else if(id==='rubrics')loadAllRubrics();
+  else if(id==='activity')loadActivity();
+  else if(id==='settings')loadSettings();
+}
+
+function emptyState(icon,t,d){return`<div class="empty-state"><div class="empty-icon">${icon}</div><h3>${t}</h3><p>${d}</p></div>`}
+
+// ── Dashboard ─────────────────────────────────────
+function loadDash(){
+  const allUsers=Users.all();
+  const allRubs=Rubrics.all();
+  const allSubs=Submissions.all();
+  const allRes=Results.all();
+  document.getElementById('admin-stats').innerHTML=`
+    <div class="stat-card animate-fade-up"><div class="stat-icon purple">U</div><div><div class="stat-value">${allUsers.length}</div><div class="stat-label">Total Users</div></div></div>
+    <div class="stat-card animate-fade-up"><div class="stat-icon teal">R</div><div><div class="stat-value">${allRubs.length}</div><div class="stat-label">Rubrics</div></div></div>
+    <div class="stat-card animate-fade-up"><div class="stat-icon yellow">S</div><div><div class="stat-value">${allSubs.length}</div><div class="stat-label">Submissions</div></div></div>
+    <div class="stat-card animate-fade-up"><div class="stat-icon green">E</div><div><div class="stat-value">${allRes.length}</div><div class="stat-label">Evaluations</div></div></div>`;
+  const recentEl=document.getElementById('recent-evals');
+  const recent=[...allRes].sort((a,b)=>new Date(b.evaluatedAt)-new Date(a.evaluatedAt)).slice(0,6);
+  recentEl.innerHTML=!recent.length?emptyState('','No evaluations yet','Data will appear once students submit.'):recent.map(r=>{
+    const s=Users.get(r.studentId)||{};
+    const a=Assignments.get(r.assignmentId)||{};
+    const pct=Math.round(r.totalScore/r.totalMarks*100);
+    return`<div class="card-flat mb-8"><div class="flex-between">
+      <div><div style="font-weight:600;font-size:.88rem">${s.name||'Student'}</div><div class="text-xs text-muted">${a.title||'Assignment'} · ${formatDateTime(r.evaluatedAt)}</div></div>
+      <span class="badge ${scoreBadge(pct)}">${r.totalScore}/${r.totalMarks}</span>
+    </div></div>`;
+  }).join('');
+  document.getElementById('sys-health').innerHTML=`
+    <div class="card-flat mb-8"><div class="flex-between"><span class="text-sm">Total Users</span><span style="font-weight:700">${Users.all().length}</span></div></div>
+    <div class="card-flat mb-8"><div class="flex-between"><span class="text-sm">Total Rubrics</span><span style="font-weight:700">${Rubrics.all().length}</span></div></div>
+    <div class="card-flat mb-8"><div class="flex-between"><span class="text-sm">Evaluations</span><span style="font-weight:700">${Results.all().length}</span></div></div>
+    <div class="card-flat mb-8"><div class="flex-between"><span class="text-sm">Evaluation Engine</span><span class="badge badge-green">Local Active</span></div></div>`;
+}
+
+// ── Users ─────────────────────────────────────────
+let currentRole='all';
+function filterUsers(role,btn){
+  currentRole=role;
+  document.querySelectorAll('#user-tabs .tab-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  loadUsers(role);
+}
+
+function loadUsers(role){
+  const users=role==='all'?Users.all():Users.byRole(role);
+  const tb=document.getElementById('users-table');
+  if(!users.length){tb.innerHTML=`<tr><td colspan="5">${emptyState('👥','No users','No users found in this category.')}</td></tr>`;return;}
+  tb.innerHTML=users.map(u=>`<tr>
+    <td><strong>${u.name}</strong></td>
+    <td class="text-sm text-muted">${u.email}</td>
+    <td><span class="badge role-badge-${u.role}">${u.role}</span></td>
+    <td class="text-sm text-muted">${formatDate(u.createdAt)}</td>
+    <td>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">Edit</button>
+        ${u.id!==session.userId?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">Delete</button>`:'<span class="badge badge-teal">You</span>'}
+      </div>
+    </td>
+  </tr>`).join('');
+}
+
+function resetUserForm(){
+  document.getElementById('edit-user-id').value='';
+  document.getElementById('user-modal-title').textContent='Add User';
+  document.getElementById('u-name').value='';
+  document.getElementById('u-email').value='';
+  document.getElementById('u-pass').value='';
+  document.getElementById('u-role').value='';
+}
+
+function editUser(id){
+  const u=Users.get(id);if(!u)return;
+  document.getElementById('edit-user-id').value=id;
+  document.getElementById('user-modal-title').textContent='Edit User';
+  document.getElementById('u-name').value=u.name;
+  document.getElementById('u-email').value=u.email;
+  document.getElementById('u-pass').value='';
+  document.getElementById('u-role').value=u.role;
+  openModal('user-modal');
+}
+
+function saveUser(e){
+  e.preventDefault();
+  const name=document.getElementById('u-name').value.trim();
+  const email=document.getElementById('u-email').value.trim();
+  const pass=document.getElementById('u-pass').value;
+  const role=document.getElementById('u-role').value;
+  const editId=document.getElementById('edit-user-id').value;
+  if(editId){
+    const updates={name,email,role};
+    if(pass)updates.password=pass;
+    Users.update(editId,updates);
+    showToast('User updated!','success');
+  }else{
+    if(Users.findByEmail(email)){showToast('Email already exists.','error');return;}
+    if(!pass){showToast('Password required for new user.','error');return;}
+    Users.add({name,email,password:pass,role});
+    showToast('User created!','success');
+  }
+  closeModal('user-modal');
+  loadUsers(currentRole);
+}
+
+function deleteUser(id){
+  confirmDialog('Delete this user? This cannot be undone.',()=>{
+    Users.delete(id);showToast('User deleted.','info');loadUsers(currentRole);
+  });
+}
+
+// ── All Rubrics ───────────────────────────────────
+function loadAllRubrics(){
+  const rubs=Rubrics.all();
+  const tb=document.getElementById('all-rubrics-table');
+  if(!rubs.length){tb.innerHTML=`<tr><td colspan="6">${emptyState('📝','No rubrics','No rubrics created yet.')}</td></tr>`;return;}
+  tb.innerHTML=rubs.map(r=>{
+    const t=Users.get(r.teacherId)||{};
+    return`<tr>
+      <td><strong>${r.title}</strong><div class="text-xs text-muted">${r.description?.slice(0,50)||''}</div></td>
+      <td class="text-sm">${t.name||'—'}</td>
+      <td class="text-sm">${r.criteria.length}</td>
+      <td><span class="badge badge-purple">${r.totalMarks} marks</span></td>
+      <td class="text-sm text-muted">${formatDate(r.createdAt)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="confirmDialog('Delete this rubric?',()=>{Rubrics.delete('${r.id}');showToast('Deleted','info');loadAllRubrics();})">Delete</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Activity ──────────────────────────────────────
+function loadActivity(){
+  const allSubs=Submissions.all();
+  const allRes=Results.all();
+  const allAsgns=Assignments.all();
+  const avg=allRes.length?Math.round(allRes.reduce((s,r)=>s+r.totalScore/r.totalMarks*100,0)/allRes.length):0;
+  document.getElementById('activity-stats').innerHTML=`
+    <div class="stat-card"><div class="stat-icon purple">📌</div><div><div class="stat-value">${allAsgns.length}</div><div class="stat-label">Assignments</div></div></div>
+    <div class="stat-card"><div class="stat-icon teal">📤</div><div><div class="stat-value">${allSubs.length}</div><div class="stat-label">Submissions</div></div></div>
+    <div class="stat-card"><div class="stat-icon green">🤖</div><div><div class="stat-value">${allRes.length}</div><div class="stat-label">Evaluations</div></div></div>
+    <div class="stat-card"><div class="stat-icon yellow">⭐</div><div><div class="stat-value">${avg}%</div><div class="stat-label">System Avg</div></div></div>`;
+  const feed=document.getElementById('activity-feed');
+  const items=[
+    ...allRes.map(r=>({ts:r.evaluatedAt,type:'eval',data:r})),
+    ...allSubs.filter(s=>s.status!=='evaluated').map(s=>({ts:s.submittedAt,type:'sub',data:s})),
+  ].sort((a,b)=>new Date(b.ts)-new Date(a.ts)).slice(0,30);
+  if(!items.length){feed.innerHTML=emptyState('📈','No activity','Activity will appear here as students submit work.');return;}
+  feed.innerHTML=items.map(item=>{
+    if(item.type==='eval'){
+      const r=item.data;
+      const s=Users.get(r.studentId)||{};
+      const a=Assignments.get(r.assignmentId)||{};
+      const pct=Math.round(r.totalScore/r.totalMarks*100);
+      return`<div class="activity-row"><div class="activity-dot" style="background:${scoreColor(pct)}"></div>
+        <div style="flex:1"><span style="font-weight:600;font-size:.88rem">${s.name||'Student'}</span> evaluated on <span style="color:var(--accent-primary)">${a.title||'assignment'}</span>
+        <div class="text-xs text-muted">${formatDateTime(r.evaluatedAt)}</div></div>
+        <span class="badge ${scoreBadge(pct)}">${r.totalScore}/${r.totalMarks}</span></div>`;
+    }else{
+      const s=item.data;
+      const st=Users.get(s.studentId)||{};
+      const a=Assignments.get(s.assignmentId)||{};
+      return`<div class="activity-row"><div class="activity-dot" style="background:var(--accent-warn)"></div>
+        <div style="flex:1"><span style="font-weight:600;font-size:.88rem">${st.name||'Student'}</span> submitted to <span style="color:var(--accent-secondary)">${a.title||'assignment'}</span>
+        <div class="text-xs text-muted">${formatDateTime(s.submittedAt)}</div></div>
+        <span class="badge badge-yellow">${s.status}</span></div>`;
+    }
+  }).join('');
+}
+
+// ── Settings ──────────────────────────────────────
+function loadSettings(){
+  document.getElementById('settings-stats').innerHTML=[
+    {label:'Total Users',val:Users.count()},
+    {label:'Total Rubrics',val:Rubrics.count()},
+    {label:'Total Submissions',val:Submissions.count()},
+    {label:'Total Evaluations',val:Results.count()},
+    {label:'Students',val:Users.byRole('student').length},
+    {label:'Teachers',val:Users.byRole('teacher').length},
+    {label:'Evaluation Engine',val:'Local (No API)'},
+  ].map(i=>`<div class="flex-between" style="padding:10px 0;border-bottom:1px solid var(--border)"><span class="text-sm text-muted">${i.label}</span><span style="font-weight:700">${i.val}</span></div>`).join('');
+  const demos=[
+    {email:'admin@eval.ai',pass:'admin123',role:'admin'},
+    {email:'teacher@eval.ai',pass:'teacher123',role:'teacher'},
+    {email:'student@eval.ai',pass:'student123',role:'student'},
+  ];
+  document.getElementById('demo-accounts').innerHTML=demos.map(d=>
+    `<div class="card-flat"><div class="flex-between"><div><div class="text-sm" style="font-weight:600">${d.email}</div><div class="text-xs text-muted">Password: ${d.pass}</div></div><span class="badge role-badge-${d.role}">${d.role}</span></div></div>`
+  ).join('');
+}
+
+function exportData(){
+  const data={users:Users.all(),rubrics:Rubrics.all(),assignments:Assignments.all(),submissions:Submissions.all(),results:Results.all(),exportedAt:new Date().toISOString()};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='evalai-export-'+Date.now()+'.json';a.click();
+  URL.revokeObjectURL(url);
+  showToast('Data exported!','success');
+}
+
+function resetAllData(){
+  confirmDialog('⚠️ DANGER: This will delete ALL data including users, rubrics, submissions and results. Type "RESET" to confirm.',()=>{
+    const input=prompt('Type RESET to confirm:');
+    if(input==='RESET'){
+      ['rub_users','rub_rubrics','rub_submissions','rub_results','rub_assignments','rub_seeded'].forEach(k=>localStorage.removeItem(k));
+      showToast('All data reset. Reloading…','info');
+      setTimeout(()=>window.location.reload(),1500);
+    }else{showToast('Reset cancelled.','info');}
+  });
+}
+
+function handleHash(){const h=window.location.hash.replace('#','');['dashboard','users','rubrics','activity','settings'].includes(h)?showSection(h):showSection('dashboard');}
+window.addEventListener('hashchange',handleHash);
+handleHash();
+</script>
+</body>
+</html>

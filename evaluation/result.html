@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Evaluation Result — EvalAI</title>
+  <link rel="stylesheet" href="../css/styles.css"/>
+  <style>
+    body{background:var(--bg-base);min-height:100vh;padding:40px 24px}
+    .result-page{max-width:820px;margin:0 auto}
+    .result-hero{background:linear-gradient(135deg,rgba(108,99,255,.15),rgba(78,205,196,.08));border:1px solid var(--glass-border);border-radius:var(--radius-xl);padding:40px;margin-bottom:32px;backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur)}
+    .big-score{font-size:4rem;font-weight:900;line-height:1}
+    .print-btn{position:fixed;bottom:32px;right:32px;z-index:100}
+    @media print{.print-btn,.back-btn{display:none!important}body{background:#fff;color:#000}
+      .card,.card-flat,.criterion-card,.result-hero{border:1px solid #ddd!important;background:#fff!important;backdrop-filter:none!important}
+      :root{--text-primary:#111;--text-secondary:#444;--text-muted:#777;--border:#ddd}}
+  </style>
+</head>
+<body>
+<div class="result-page animate-fade-up">
+  <div class="flex-between mb-24">
+    <button class="btn btn-ghost back-btn" onclick="history.back()">← Back</button>
+    <div style="display:flex;gap:10px">
+      <a class="btn btn-ghost btn-sm" href="../student/index.html#results">My Results</a>
+    </div>
+  </div>
+  <div id="result-content">
+    <div class="empty-state"><div class="empty-icon">⏳</div><h3>Loading result…</h3></div>
+  </div>
+</div>
+
+<button class="btn btn-primary print-btn" onclick="window.print()">🖨 Print Result</button>
+
+<script src="../js/storage.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+Auth.requireAnyRole('student','teacher','admin');
+const params=new URLSearchParams(window.location.search);
+const resultId=params.get('id');
+const submissionId=params.get('sub');
+
+const r=resultId?Results.get(resultId):(submissionId?Results.bySubmission(submissionId):null);
+const el=document.getElementById('result-content');
+
+if(!r){
+  el.innerHTML=`<div class="empty-state"><div class="empty-icon">❌</div><h3>Result not found</h3><p>This evaluation result could not be found.</p></div>`;
+}else{
+  const a=Assignments.get(r.assignmentId)||{};
+  const rub=Rubrics.get(r.rubricId)||{};
+  const s=Users.get(r.studentId)||{};
+  const sub=Submissions.get(r.submissionId)||{};
+  const pct=Math.round(r.totalScore/r.totalMarks*100);
+  document.title=`${a.title||'Result'} — EvalAI`;
+
+  el.innerHTML=`
+    <div class="result-hero">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:20px">
+        <div>
+          <h1 style="font-size:1.5rem;margin-bottom:8px">${a.title||rub.title||'Evaluation Result'}</h1>
+          <p class="text-muted text-sm">Student: <strong style="color:var(--text-primary)">${s.name||'—'}</strong> · Evaluated ${formatDateTime(r.evaluatedAt)}</p>
+          <div class="alert alert-info mt-12" style="font-size:.8rem">Evaluated locally — rubric-based analysis, no external API.</div>
+        </div>
+        <div style="text-align:center">
+          <div class="big-score" style="color:${scoreColor(pct)}">${r.totalScore}<span style="font-size:1.5rem;color:var(--text-muted)">/${r.totalMarks}</span></div>
+          <div style="font-size:1.2rem;font-weight:700;color:${scoreColor(pct)};margin-top:4px">${pct}% · Grade ${gradeLabel(pct)}</div>
+          <span class="badge ${scoreBadge(pct)} mt-8">${pct>=80?'Excellent':pct>=60?'Good':pct>=50?'Average':'Needs Work'}</span>
+        </div>
+      </div>
+      <div class="progress-wrap mt-20" style="height:12px">
+        <div class="progress-bar" style="width:${pct}%;background:${scoreColor(pct)}"></div>
+      </div>
+    </div>
+
+    ${sub.content?`<div class="card mb-24">
+      <h3 class="mb-12">📄 Student Submission</h3>
+      <pre style="background:var(--bg-input);border-radius:var(--radius-md);padding:16px;font-family:'JetBrains Mono',monospace;font-size:.82rem;line-height:1.7;white-space:pre-wrap;color:var(--text-secondary);border:1px solid var(--border)">${sub.content.replace(/</g,'&lt;')}</pre>
+    </div>`:''}
+
+    <h3 style="margin-bottom:16px">📋 Criterion-wise Evaluation</h3>
+    ${(r.criteria||[]).map((c,i)=>{
+      const cp=Math.round(c.awarded/c.max*100);
+      return`<div class="criterion-card">
+        <div class="criterion-header">
+          <div><span style="color:var(--text-muted);font-size:.8rem;margin-right:8px">${i+1}.</span><span class="criterion-name">${c.name}</span></div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:60px;text-align:right;font-size:.8rem;color:var(--text-muted)">${cp}%</div>
+            <span class="criterion-score" style="color:${scoreColor(cp)}">${c.awarded} / ${c.max}</span>
+          </div>
+        </div>
+        <div class="progress-wrap mb-10" style="height:5px"><div class="progress-bar" style="width:${cp}%;background:${scoreColor(cp)}"></div></div>
+        <p class="criterion-feedback">${c.feedback}</p>
+      </div>`;
+    }).join('')}
+
+    <div class="grid-2 mt-24 mb-20" style="gap:20px">
+      <div class="card">
+        <h4 class="mb-12" style="color:var(--accent-success)">💪 Strengths</h4>
+        <ul>${(r.strengths||[]).map(s=>`<li style="display:flex;gap:10px;margin-bottom:8px;font-size:.88rem"><span style="color:var(--accent-success);font-weight:700;flex-shrink:0">✓</span>${s}</li>`).join('')}</ul>
+      </div>
+      <div class="card">
+        <h4 class="mb-12" style="color:var(--accent-danger)">⚠️ Weaknesses</h4>
+        <ul>${(r.weaknesses||[]).map(w=>`<li style="display:flex;gap:10px;margin-bottom:8px;font-size:.88rem"><span style="color:var(--accent-danger);font-weight:700;flex-shrink:0">✗</span>${w}</li>`).join('')}</ul>
+      </div>
+    </div>
+
+    <div class="card mb-32">
+      <h4 class="mb-12" style="color:var(--accent-warn)">💡 Suggestions for Improvement</h4>
+      <ul class="bullet-list">${(r.suggestions||[]).map(s=>`<li>${s}</li>`).join('')}</ul>
+    </div>
+
+    <div class="card-flat" style="text-align:center;color:var(--text-muted);font-size:.82rem">
+      Generated by EvalAI · ${formatDateTime(r.evaluatedAt)} · Rubric: ${rub.title||'—'}
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
