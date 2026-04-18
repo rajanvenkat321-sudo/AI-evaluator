@@ -4,6 +4,7 @@
   "description": "An intelligent web-based platform for evaluating student submissions (algorithms, pseudocode, flowchart steps) using Google Gemini AI against teacher-defined rubrics.",
   "main": "index.js",
   "scripts": {
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

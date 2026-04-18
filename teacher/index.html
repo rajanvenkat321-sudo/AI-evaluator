@@ -190,7 +190,7 @@ function loadDash(){
       <div><div style="font-weight:600;font-size:.88rem">${st.name||'Student'}</div><div class="text-xs text-muted">${a.title||''} · ${formatDateTime(s.submittedAt)}</div></div>
       <div style="display:flex;align-items:center;gap:12px">
         ${pct!==null?`<span class="badge ${scoreBadge(pct)}">${r.totalScore}/${r.totalMarks}</span>`:`<span class="badge badge-yellow">${s.status}</span>`}
-        ${s.status === 'evaluated' ? `<button class="btn btn-success btn-sm" onclick="approveSubmission('${s.id}')">Approve</button>` : ''}
+        ${s.status !== 'approved' ? `<button class="btn btn-success btn-sm" onclick="approveSubmission('${s.id}')">Approve</button>` : ''}
         <button class="btn btn-outline btn-sm" onclick="viewSubmission('${s.id}')">View Work</button>
       </div>
     </div></div>`;
@@ -428,7 +428,7 @@ function renderSubmissionsReport(){
         <td>${r?`<span class="badge ${scoreBadge(pct)}">${r.totalScore}/${r.totalMarks} (${pct}%)</span>`:'—'}</td>
         <td>
           <div style="display:flex;gap:8px;">
-            ${s.status==='evaluated'?`<button class="btn btn-success btn-sm" onclick="approveSubmission('${s.id}')">Approve</button>`:''}
+            ${s.status !== 'approved' ? `<button class="btn btn-success btn-sm" onclick="approveSubmission('${s.id}')">Approve</button>` : ''}
             <button class="btn btn-ghost btn-sm" onclick="viewSubmission('${s.id}')">View Work</button>
           </div>
         </td>
